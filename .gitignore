@@ -1,0 +1,16 @@
+# Ignore Python environments
+venv/
+__pycache__/
+
+# Ignore node modules
+node_modules/
+dist/
+
+# Ignore React build
+build/
+
+# Ignore dotenv files
+.env
+
+# VSCode settings (optional)
+.vscode/
