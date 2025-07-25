@@ -21,3 +21,4 @@ def log_attack(event_type, data):
 
     collection.insert_one(log)
     print("[+] Logged Event: ", log)
+

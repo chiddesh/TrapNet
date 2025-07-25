@@ -5,7 +5,8 @@ import threading
 from colorama import Fore, Style
 
 # Add parent directories to import local modules
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 
 from dataBase.mongo_client import log_attack
 from fake_commands import commands

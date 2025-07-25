@@ -44,15 +44,15 @@ def classify_risk(attacks):
 @app.route('/web-log',methods=['POST'])
 def log_login():
     data = request.json
-    usename = escape(data.get('username', ''))
+    username = escape(data.get('userName', ''))
     password = escape(data.get('password', ''))
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     ip_address = request.remote_addr
 
-    attacks = detect_attack(usename, password)
+    attacks = detect_attack(username, password)
     risk_level = classify_risk(attacks)
     log_entry = {
-        "username": usename,
+        "username": username,
         "password": password,
         "timestamp": timestamp,
         "ip": ip_address,

@@ -4,7 +4,7 @@ function LoginForm() {
     const [userName, setUserName] = useState("");
     const [password, setPassword] = useState("");
 
-    const BACKEND_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:5000"; // for Vite
+    const BACKEND_URL = import.meta.env.REACT_APP_API_URL || "http://127.0.0.1:5000"; // for Vite
 
     const handleLogin = async (e) => {
         e.preventDefault();
