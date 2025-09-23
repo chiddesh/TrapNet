@@ -1,16 +1,33 @@
-# Ignore Python environments
-venv/
-__pycache__/
-
-# Ignore node modules
+# dependencies
 node_modules/
-dist/
+.pnpm-debug.log*
+yarn.lock
+package-lock.json
 
-# Ignore React build
+# build output
+dist/
 build/
 
-# Ignore dotenv files
+# local env files
 .env
+.env.local
+.env.*.local
 
-# VSCode settings (optional)
+# Editor settings
 .vscode/
+.idea/
+*.swp
+*.swo
+
+# system files
+.DS_Store
+Thumbs.db
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Optional: OS / other junk
+*.log
