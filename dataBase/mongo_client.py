@@ -1,18 +1,16 @@
-# app.py
 from flask import Flask, request, jsonify
 from pymongo import MongoClient, errors
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
 import logging
 
 load_dotenv()
 app = Flask(__name__)
 CORS(app)
-
 logging.basicConfig(level=logging.INFO)
 
 MONGO_URI = os.getenv("MONGO_URI")
@@ -23,8 +21,13 @@ try:
     client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
     db = client["TrapNet"]
     collection = db["honeypotAttacks"]
-    collection.create_index("ip_address")
-    collection.create_index("timestamp_utc")
+
+    existing_indexes = collection.index_information()
+    if "ip_address_1" not in existing_indexes:
+        collection.create_index("ip_address")
+    if "timestamp_utc_1" not in existing_indexes:
+        collection.create_index("timestamp_utc")
+
 except errors.ServerSelectionTimeoutError as e:
     raise RuntimeError("Could not connect to MongoDB: " + str(e))
 
@@ -40,6 +43,7 @@ attack_patterns = {
     "Path Traversal": [r"\.\./", r"%2e%2e%2f", r"(?i)\betc/passwd\b"],
 }
 
+SESSION_WINDOW = 5  # 5 minutes
 
 def detect_attack(username: str, password: str, raw_body: str):
     attacks_detected = []
@@ -54,7 +58,6 @@ def detect_attack(username: str, password: str, raw_body: str):
                 continue
     return attacks_detected
 
-
 def risk_score(attacks):
     if any(a in attacks for a in ("SQL Injection", "Command Injection")):
         return "High"
@@ -64,11 +67,28 @@ def risk_score(attacks):
         return "Low"
     return "None"
 
+def deduce_intent(session_requests):
+    """Deduce attacker intent based on session behavior"""
+    request_count = len(session_requests)
+    attack_count = sum(len(r['attacks_detected']) for r in session_requests)
+    if request_count > 10 and attack_count == 0:
+        return "Reconnaissance"
+    if attack_count > 0 and request_count <= 10:
+        return "Exploitation"
+    if request_count > 10 and attack_count > 0:
+        return "Scanning"
+    return "Normal"
+
+def compute_session_risk(session_requests):
+    """Aggregate risk over a session"""
+    risk_levels = {"None": 0, "Low": 1, "Medium": 2, "High": 3}
+    max_risk = max([risk_levels[r['risk_score']] for r in session_requests], default=0)
+    reverse_risk_levels = {v: k for k, v in risk_levels.items()}
+    return reverse_risk_levels[max_risk]
 
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
-
 
 @app.route("/log", methods=["POST"])
 def log_attack():
@@ -88,25 +108,38 @@ def log_attack():
     xff = headers.get("X-Forwarded-For", "")
     ip_address = xff.split(",")[0].strip() if xff else request.remote_addr
 
-    timestamp_utc = datetime.now(timezone.utc).isoformat()
+    timestamp_utc = datetime.now(timezone.utc)
 
     attacks = detect_attack(username, password, raw_body)
     risk = risk_score(attacks)
 
+    window_start = timestamp_utc - timedelta(minutes=SESSION_WINDOW)
+    session_requests = list(collection.find({
+        "ip_address": ip_address,
+        "timestamp_utc": {"$gte": window_start.isoformat()}
+    }))
+
+    session_intent = deduce_intent(session_requests)
+    session_risk = compute_session_risk(session_requests)
+    session_request_count = len(session_requests)
+
     log_entry = {
         "_id": str(uuid.uuid4()),
-        "timestamp_utc": timestamp_utc,
+        "timestamp_utc": timestamp_utc.isoformat(),
         "ip_address": ip_address,
+        "user_agent": user_agent,
         "path": request.path,
         "method": request.method,
         "headers": headers,
-        "user_agent": user_agent,
         "query_string": query_string,
         "body_raw": raw_body,
         "username": username,
         "password": password,
         "attacks_detected": attacks,
         "risk_score": risk,
+        "session_intent": session_intent,
+        "session_risk": session_risk,
+        "session_request_count": session_request_count
     }
 
     try:
@@ -115,8 +148,10 @@ def log_attack():
         logging.exception("Failed to insert log entry")
         return jsonify({"status": "error", "error": str(e)}), 500
 
-    return jsonify({"status": "logged", "attacks_detected": attacks, "risk_score": risk}), 201
+    if session_risk == "High":
+        logging.warning(f"High-risk session detected from IP {ip_address} ({session_intent})")
 
+    return jsonify(log_entry), 201
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)

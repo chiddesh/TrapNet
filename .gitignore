@@ -8,6 +8,8 @@ package-lock.json
 dist/
 build/
 
+
+
 # local env files
 .env
 .env.local
@@ -31,3 +33,4 @@ pnpm-debug.log*
 
 # Optional: OS / other junk
 *.log
+testing.py
